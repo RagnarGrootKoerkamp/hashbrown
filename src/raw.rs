@@ -1187,6 +1187,37 @@ impl<T, A: Allocator> RawTable<T, A> {
         }
     }
 
+    /// Prefetches the ctrl-byte group and the data slot at the initial probe
+    /// position for `hash`.
+    ///
+    /// This should be called well before the corresponding [`find`] so that
+    /// the CPU can hide the cache-miss latency.
+    ///
+    /// [`find`]: RawTable::find
+    #[inline]
+    pub(crate) fn prefetch(&self, hash: u64) {
+        // probe_pos = h1(hash) & bucket_mask
+        let probe_pos = h1(hash) & self.table.bucket_mask;
+        unsafe {
+            // Control bytes start at `ctrl`; the group for this probe is at ctrl[probe_pos].
+            let ctrl_ptr = self.table.ctrl.as_ptr().add(probe_pos) as *const i8;
+            // Data grows downwards immediately before ctrl: element `i` is at data_end - (i+1).
+            let data_ptr = self.data_end().as_ptr().sub(probe_pos + 1) as *const i8;
+            #[cfg(all(target_arch = "x86_64", target_feature = "sse"))]
+            {
+                core::arch::x86_64::_mm_prefetch(ctrl_ptr, core::arch::x86_64::_MM_HINT_T0);
+                core::arch::x86_64::_mm_prefetch(data_ptr, core::arch::x86_64::_MM_HINT_T0);
+            }
+            #[cfg(all(target_arch = "x86", target_feature = "sse"))]
+            {
+                core::arch::x86::_mm_prefetch(ctrl_ptr, core::arch::x86::_MM_HINT_T0);
+                core::arch::x86::_mm_prefetch(data_ptr, core::arch::x86::_MM_HINT_T0);
+            }
+            // Suppress unused-variable warnings on other architectures.
+            let _ = (ctrl_ptr, data_ptr);
+        }
+    }
+
     /// Searches for an element in the table.
     #[inline]
     pub(crate) fn find(&self, hash: u64, mut eq: impl FnMut(&T) -> bool) -> Option<Bucket<T>> {

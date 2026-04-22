@@ -854,6 +854,33 @@ where
         self.map.contains_key(value)
     }
 
+    /// Computes the hash of `value`, issues prefetch instructions for the
+    /// ctrl-byte group and the data slot at the initial probe position, and
+    /// returns the hash as a token.
+    ///
+    /// Pass the token to [`contains_with_hash`](HashSet::contains_with_hash)
+    /// after performing enough other work to hide the cache-miss latency.
+    #[cfg_attr(feature = "inline-more", inline)]
+    pub fn prefetch<Q>(&self, value: &Q) -> u64
+    where
+        Q: Hash + ?Sized,
+    {
+        let hash = map::make_hash(&self.map.hash_builder, value);
+        self.map.table.prefetch(hash);
+        hash
+    }
+
+    /// Returns `true` if the set contains a value equal to `value`, using
+    /// `hash` (previously returned by [`prefetch_hash`](HashSet::prefetch_hash))
+    /// instead of recomputing it.
+    #[cfg_attr(feature = "inline-more", inline)]
+    pub fn contains_with_hash<Q>(&self, value: &Q, hash: u64) -> bool
+    where
+        Q: Equivalent<T> + ?Sized,
+    {
+        self.map.table.get(hash, map::equivalent_key(value)).is_some()
+    }
+
     /// Returns a reference to the value in the set, if any, that is equal to the given value.
     ///
     /// The value may be any borrowed form of the set's value type, but
