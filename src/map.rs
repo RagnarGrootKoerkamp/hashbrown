@@ -5077,7 +5077,8 @@ mod test_map {
     use core::alloc::Layout;
     use core::ptr::NonNull;
     use core::sync::atomic::{AtomicI8, Ordering};
-    use rand::{Rng, SeedableRng, rngs::SmallRng};
+    use rand::RngExt;
+    use rand::{rngs::SmallRng, SeedableRng};
     use std::borrow::ToOwned;
     use std::cell::RefCell;
     use std::vec::Vec;
@@ -5945,7 +5946,7 @@ mod test_map {
     #[test]
     fn test_entry_take_doesnt_corrupt() {
         #![expect(deprecated)] //rand
-        // Test for #19292
+                               // Test for #19292
         fn check(m: &HashMap<i32, ()>) {
             for k in m.keys() {
                 assert!(m.contains_key(k), "{k} is in keys() but not in the map?");
@@ -5961,12 +5962,12 @@ mod test_map {
 
         // Populate the map with some items.
         for _ in 0..50 {
-            let x = rng.gen_range(-10..10);
+            let x = rng.random_range(-10..10);
             m.insert(x, ());
         }
 
         for _ in 0..1000 {
-            let x = rng.gen_range(-10..10);
+            let x = rng.random_range(-10..10);
             match m.entry(x) {
                 Vacant(_) => {}
                 Occupied(e) => {
@@ -5981,7 +5982,7 @@ mod test_map {
     #[test]
     fn test_entry_ref_take_doesnt_corrupt() {
         #![expect(deprecated)] //rand
-        // Test for #19292
+                               // Test for #19292
         fn check(m: &HashMap<std::string::String, ()>) {
             for k in m.keys() {
                 assert!(m.contains_key(k), "{k} is in keys() but not in the map?");
@@ -5998,13 +5999,13 @@ mod test_map {
         // Populate the map with some items.
         for _ in 0..50 {
             let mut x = std::string::String::with_capacity(1);
-            x.push(rng.gen_range('a'..='z'));
+            x.push(rng.random_range('a'..='z'));
             m.insert(x, ());
         }
 
         for _ in 0..1000 {
             let mut x = std::string::String::with_capacity(1);
-            x.push(rng.gen_range('a'..='z'));
+            x.push(rng.random_range('a'..='z'));
             match m.entry_ref(x.as_str()) {
                 EntryRef::Vacant(_) => {}
                 EntryRef::Occupied(e) => {
@@ -6255,7 +6256,7 @@ mod test_map {
     #[test]
     fn test_replace_entry_with_doesnt_corrupt() {
         #![expect(deprecated)] //rand
-        // Test for #19292
+                               // Test for #19292
         fn check(m: &HashMap<i32, ()>) {
             for k in m.keys() {
                 assert!(m.contains_key(k), "{k} is in keys() but not in the map?");
@@ -6271,12 +6272,12 @@ mod test_map {
 
         // Populate the map with some items.
         for _ in 0..50 {
-            let x = rng.gen_range(-10..10);
+            let x = rng.random_range(-10..10);
             m.insert(x, ());
         }
 
         for _ in 0..1000 {
-            let x = rng.gen_range(-10..10);
+            let x = rng.random_range(-10..10);
             m.entry(x).and_replace_entry_with(|_, _| None);
             check(&m);
         }
@@ -6906,7 +6907,7 @@ mod test_map_with_mmap_allocations {
     use super::HashMap;
     use crate::raw::prev_pow2;
     use core::alloc::Layout;
-    use core::ptr::{NonNull, null_mut};
+    use core::ptr::{null_mut, NonNull};
 
     #[cfg(feature = "nightly")]
     use core::alloc::{AllocError, Allocator};
