@@ -858,12 +858,20 @@ where
     ///
     /// [`Eq`]: https://doc.rust-lang.org/std/cmp/trait.Eq.html
     /// [`Hash`]: https://doc.rust-lang.org/std/hash/trait.Hash.html
-    #[cfg_attr(feature = "inline-more", inline)]
+    #[inline(always)]
     pub fn contains<Q>(&self, value: &Q) -> bool
     where
         Q: Hash + Equivalent<T> + ?Sized,
     {
         self.map.contains_key(value)
+    }
+
+    #[inline(always)]
+    pub fn contains_prefetch<Q>(&self, value: &Q)
+    where
+        Q: Hash + Equivalent<T> + ?Sized,
+    {
+        self.map.contains_key_prefetch(value)
     }
 
     /// Returns a reference to the value in the set, if any, that is equal to the given value.

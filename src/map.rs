@@ -1343,7 +1343,7 @@ where
         }
     }
 
-    #[inline]
+    #[inline(always)]
     fn get_inner<Q>(&self, k: &Q) -> Option<&(K, V)>
     where
         Q: Hash + Equivalent<K> + ?Sized,
@@ -1353,6 +1353,18 @@ where
         } else {
             let hash = make_hash::<Q, S>(&self.hash_builder, k);
             self.table.get(hash, equivalent_key(k))
+        }
+    }
+
+    #[inline(always)]
+    fn get_inner_prefetch<Q>(&self, k: &Q)
+    where
+        Q: Hash + Equivalent<K> + ?Sized,
+    {
+        if self.table.is_empty() {
+        } else {
+            let hash = make_hash::<Q, S>(&self.hash_builder, k);
+            self.table.get_prefetch(hash)
         }
     }
 
@@ -1410,12 +1422,20 @@ where
     /// assert_eq!(map.contains_key(&1), true);
     /// assert_eq!(map.contains_key(&2), false);
     /// ```
-    #[cfg_attr(feature = "inline-more", inline)]
+    #[inline(always)]
     pub fn contains_key<Q>(&self, k: &Q) -> bool
     where
         Q: Hash + Equivalent<K> + ?Sized,
     {
         self.get_inner(k).is_some()
+    }
+
+    #[inline(always)]
+    pub fn contains_key_prefetch<Q>(&self, k: &Q)
+    where
+        Q: Hash + Equivalent<K> + ?Sized,
+    {
+        self.get_inner_prefetch(k)
     }
 
     /// Returns a mutable reference to the value corresponding to the key.

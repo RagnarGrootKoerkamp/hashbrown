@@ -3,6 +3,7 @@ use crate::control::{BitMaskIter, Group, Tag, TagSliceExt};
 use crate::scopeguard::{guard, ScopeGuard};
 use crate::util::{invalid_mut, likely, unlikely};
 use crate::TryReserveError;
+use core::arch::x86_64::{_mm_prefetch, _MM_HINT_NTA, _MM_HINT_T0};
 use core::array;
 use core::iter::FusedIterator;
 use core::marker::PhantomData;
@@ -1183,7 +1184,7 @@ impl<T, A: Allocator> RawTable<T, A> {
     }
 
     /// Searches for an element in the table.
-    #[inline]
+    #[inline(always)]
     pub fn find(&self, hash: u64, mut eq: impl FnMut(&T) -> bool) -> Option<Bucket<T>> {
         unsafe {
             // SAFETY:
@@ -1204,15 +1205,31 @@ impl<T, A: Allocator> RawTable<T, A> {
             }
         }
     }
+    #[inline(always)]
+    pub fn find_prefetch(&self, hash: u64) {
+        unsafe {
+            let expected_index = self.table.find_inner_prefetch(hash);
+            // _mm_prefetch(
+            //     self.bucket(expected_index).ptr.as_ptr() as *const i8,
+            //     _MM_HINT_T0,
+            // );
+        }
+    }
 
     /// Gets a reference to an element in the table.
-    #[inline]
+    #[inline(always)]
     pub fn get(&self, hash: u64, eq: impl FnMut(&T) -> bool) -> Option<&T> {
         // Avoid `Option::map` because it bloats LLVM IR.
         match self.find(hash, eq) {
             Some(bucket) => Some(unsafe { bucket.as_ref() }),
             None => None,
         }
+    }
+
+    #[inline(always)]
+    pub fn get_prefetch(&self, hash: u64) {
+        // Avoid `Option::map` because it bloats LLVM IR.
+        self.find_prefetch(hash)
     }
 
     /// Gets a mutable reference to an element in the table.
@@ -1929,6 +1946,17 @@ impl RawTableInner {
 
             probe_seq.move_next(self.bucket_mask);
         }
+    }
+
+    /// Returns the speculative index of the element.
+    #[inline(always)]
+    unsafe fn find_inner_prefetch(&self, hash: u64) -> usize {
+        let probe_seq = self.probe_seq(hash);
+
+        let ctrl_ptr = self.ctrl(probe_seq.pos);
+        unsafe { _mm_prefetch(ctrl_ptr as *const i8, _MM_HINT_T0) };
+
+        probe_seq.pos
     }
 
     /// Prepares for rehashing data in place (that is, without allocating new memory).
@@ -4231,7 +4259,7 @@ mod test_map {
     /// AN UNINITIALIZED TABLE DURING THE DROP
     #[test]
     fn test_drop_uninitialized() {
-        use ::alloc::vec::Vec;
+        use alloc::vec::Vec;
 
         let table = unsafe {
             // SAFETY: The `buckets` is power of two and we're not
@@ -4246,7 +4274,7 @@ mod test_map {
     /// ARE ZERO, EVEN IF WE HAVE `FULL` CONTROL BYTES.
     #[test]
     fn test_drop_zero_items() {
-        use ::alloc::vec::Vec;
+        use alloc::vec::Vec;
         unsafe {
             // SAFETY: The `buckets` is power of two and we're not
             // trying to actually use the returned RawTable.
@@ -4292,8 +4320,8 @@ mod test_map {
     #[test]
     fn test_catch_panic_clone_from() {
         use super::{AllocError, Allocator, Global};
-        use ::alloc::sync::Arc;
-        use ::alloc::vec::Vec;
+        use alloc::sync::Arc;
+        use alloc::vec::Vec;
         use core::sync::atomic::{AtomicI8, Ordering};
         use std::thread;
 
